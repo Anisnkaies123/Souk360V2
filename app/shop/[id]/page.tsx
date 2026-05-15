@@ -225,6 +225,31 @@ export default function ShopProfilePage() {
             </div>
           </div>
 
+          {shop.videoUrl ? (
+            <div
+              style={{
+                background: '#0f2d56',
+                border: '1px solid #1e4a7a',
+                borderRadius: '12px',
+                padding: '1.25rem',
+                marginBottom: '1.5rem',
+              }}
+            >
+              <h2 style={{ fontWeight: 700, fontSize: '1.125rem', color: '#f0f4f8', margin: '0 0 1rem' }}>🎬 Vidéo</h2>
+              <video
+                src={shop.videoUrl}
+                controls
+                playsInline
+                style={{
+                  width: '100%',
+                  borderRadius: '10px',
+                  maxHeight: '420px',
+                  background: '#0a1f3c',
+                }}
+              />
+            </div>
+          ) : null}
+
           <div
             style={{
               background: '#0f2d56',

@@ -23,6 +23,7 @@ create table public.shops (
   phone text,
   address text,
   photos text[] not null default '{}',
+  video_url text,
   whatsapp text,
   hours jsonb,
   is_approved boolean not null default false,

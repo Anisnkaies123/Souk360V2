@@ -18,6 +18,7 @@ export type ShopRow = {
   phone: string | null;
   address: string | null;
   photos: string[] | null;
+  video_url: string | null;
   whatsapp: string | null;
   hours: Record<string, HoursEntry> | null;
   is_approved: boolean;
@@ -26,7 +27,7 @@ export type ShopRow = {
 };
 
 const SHOP_SELECT =
-  'id, name, category, description, phone, address, photos, whatsapp, hours, is_approved, owner_id, created_at';
+  'id, name, category, description, phone, address, photos, video_url, whatsapp, hours, is_approved, owner_id, created_at';
 
 function parseHours(raw: unknown): Record<string, HoursEntry> | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
@@ -44,6 +45,8 @@ function normalizeShopRows(rows: unknown[]): ShopRow[] {
       phone: r.phone ?? null,
       address: r.address ?? null,
       photos: Array.isArray(r.photos) ? r.photos : null,
+      video_url:
+        typeof r.video_url === 'string' && r.video_url.trim().length > 0 ? r.video_url.trim() : null,
       whatsapp: r.whatsapp ?? null,
       hours: parseHours(r.hours),
       is_approved: Boolean(r.is_approved),
@@ -110,6 +113,7 @@ function mapRowToShop(
     description: row.description ?? '',
     hours: mapHoursJson(hoursJson),
     photos,
+    videoUrl: row.video_url,
     distance,
   };
 }

@@ -16,6 +16,8 @@ export type Shop = {
   description: string;
   hours: { day: string; time: string }[];
   photos: string[];
+  /** Public Supabase Storage URL for an optional promo video */
+  videoUrl: string | null;
   distance?: string;
 };
 

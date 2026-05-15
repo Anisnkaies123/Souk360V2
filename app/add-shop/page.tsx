@@ -11,6 +11,7 @@ import {
   uploadShopPhoto,
   validateShopPhotoFile,
 } from '@/lib/shop-photos';
+import { deleteShopVideo, uploadShopVideo, validateShopVideoFile } from '@/lib/shop-videos';
 import { supabase } from '@/lib/supabase';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
@@ -32,6 +33,14 @@ const defaultHours: Record<string, HoursEntry> = DAYS.reduce((acc, day) => {
   acc[day] = { open: day !== 'Dimanche', from: '09:00', to: '18:00' };
   return acc;
 }, {} as Record<string, HoursEntry>);
+
+type VideoDraft = {
+  previewUrl: string;
+  publicUrl?: string;
+  storagePath?: string;
+  uploading: boolean;
+  error?: string;
+};
 
 export default function AddShopPage() {
   const router = useRouter();
@@ -56,6 +65,22 @@ export default function AddShopPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [photoError, setPhotoError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [videoDraft, setVideoDraft] = useState<VideoDraft | null>(null);
+  const [videoDragging, setVideoDragging] = useState(false);
+  const [videoError, setVideoError] = useState('');
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const videoDraftRef = useRef<VideoDraft | null>(null);
+
+  useEffect(() => {
+    videoDraftRef.current = videoDraft;
+  }, [videoDraft]);
+
+  useEffect(() => {
+    return () => {
+      const v = videoDraftRef.current;
+      if (v?.previewUrl.startsWith('blob:')) URL.revokeObjectURL(v.previewUrl);
+    };
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -96,6 +121,67 @@ export default function AddShopPage() {
     return Object.keys(e).length === 0;
   }
 
+  const addVideoFromFile = useCallback(
+    async (file: File) => {
+      if (!user) return;
+      setVideoError('');
+      const validationError = validateShopVideoFile(file);
+      if (validationError) {
+        setVideoError(validationError);
+        return;
+      }
+
+      const prev = videoDraftRef.current;
+      if (prev?.previewUrl.startsWith('blob:')) URL.revokeObjectURL(prev.previewUrl);
+      if (prev?.storagePath) {
+        try {
+          await deleteShopVideo(prev.storagePath);
+        } catch {
+          /* orphan file is acceptable */
+        }
+      }
+
+      const previewUrl = URL.createObjectURL(file);
+      setVideoDraft({ previewUrl, uploading: true });
+
+      try {
+        const { publicUrl, storagePath } = await uploadShopVideo(file, user.id);
+        setVideoDraft({
+          previewUrl,
+          publicUrl,
+          storagePath,
+          uploading: false,
+        });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Échec du téléversement vidéo (bucket shop-videos ?).';
+        setVideoDraft({ previewUrl, uploading: false, error: message });
+      }
+    },
+    [user],
+  );
+
+  async function removeVideo() {
+    const v = videoDraftRef.current;
+    if (v?.previewUrl.startsWith('blob:')) URL.revokeObjectURL(v.previewUrl);
+    if (v?.storagePath) {
+      try {
+        await deleteShopVideo(v.storagePath);
+      } catch {
+        /* UI still clears */
+      }
+    }
+    setVideoDraft(null);
+    setVideoError('');
+  }
+
+  function handleVideoDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setVideoDragging(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) void addVideoFromFile(f);
+  }
+
   function handleNext() {
     if (step === 1 && validateStep1()) setStep(2);
     else if (step === 2 && validateStep2()) setStep(3);
@@ -106,6 +192,9 @@ export default function AddShopPage() {
     .map((p) => p.publicUrl as string);
 
   const photosUploading = photoItems.some((p) => p.uploading);
+
+  const videoUploading = Boolean(videoDraft?.uploading);
+  const mediaUploading = photosUploading || videoUploading;
 
   const photoItemsRef = useRef(photoItems);
   photoItemsRef.current = photoItems;
@@ -192,6 +281,10 @@ export default function AddShopPage() {
       setSubmitError('Veuillez attendre la fin du téléversement des photos.');
       return;
     }
+    if (videoUploading) {
+      setSubmitError('Veuillez attendre la fin du téléversement de la vidéo.');
+      return;
+    }
     setSubmitError('');
     setSubmitting(true);
     const { error } = await supabase.from('shops').insert({
@@ -203,6 +296,7 @@ export default function AddShopPage() {
       whatsapp: form.whatsapp.trim() || null,
       hours: form.hours,
       photos: uploadedPhotoUrls.length > 0 ? uploadedPhotoUrls : [],
+      video_url: videoDraft?.publicUrl && !videoDraft.error ? videoDraft.publicUrl : null,
       owner_id: user.id,
       is_approved: false,
     });
@@ -217,7 +311,7 @@ export default function AddShopPage() {
   const STEPS = [
     { n: 1, label: 'Infos de base' },
     { n: 2, label: 'Localisation & Horaires' },
-    { n: 3, label: 'Photos' },
+    { n: 3, label: 'Photos & Vidéo' },
   ];
 
   if (!authChecked || !user) {
@@ -682,6 +776,139 @@ export default function AddShopPage() {
               </div>
             )}
 
+            <h3
+              style={{
+                fontWeight: 700,
+                fontSize: '1rem',
+                color: '#f0f4f8',
+                margin: '1.5rem 0 0.5rem',
+              }}
+            >
+              Vidéo courte (facultatif)
+            </h3>
+            <p style={{ color: '#94b4d4', fontSize: '0.875rem', marginBottom: '1rem' }}>
+              Une seule vidéo par commerce — MP4 ou WebM, max 50 Mo.
+            </p>
+
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/mp4,video/webm"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void addVideoFromFile(f);
+                e.target.value = '';
+              }}
+            />
+
+            <div
+              style={{
+                border: `2px dashed ${videoDragging ? '#378ADD' : '#1e4a7a'}`,
+                borderRadius: '12px',
+                padding: '2rem 1rem',
+                textAlign: 'center',
+                cursor: videoDraft ? 'default' : 'pointer',
+                background: videoDragging ? 'rgba(55,138,221,0.08)' : '#163660',
+                marginBottom: '1rem',
+                transition: 'border-color 0.2s, background 0.2s',
+                opacity: videoDraft?.uploading ? 0.7 : 1,
+              }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (!videoDraft && (e.key === 'Enter' || e.key === ' ')) videoInputRef.current?.click();
+              }}
+              onClick={() => {
+                if (!videoDraft) videoInputRef.current?.click();
+              }}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setVideoDragging(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) setVideoDragging(false);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setVideoDragging(true);
+              }}
+              onDrop={handleVideoDrop}
+            >
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎬</div>
+              <p style={{ color: '#94b4d4', fontWeight: 600, margin: '0 0 0.25rem' }}>
+                {videoDraft ? 'Une vidéo est sélectionnée' : 'Glissez une vidéo ici ou cliquez'}
+              </p>
+              <p style={{ color: '#5a7fa8', fontSize: '0.875rem', margin: 0 }}>MP4, WebM — max 50 Mo</p>
+            </div>
+
+            {videoError && (
+              <p style={{ color: '#fbbf24', fontSize: '0.85rem', margin: '0 0 1rem' }}>{videoError}</p>
+            )}
+
+            {videoDraft && (
+              <div
+                style={{
+                  position: 'relative',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  border: videoDraft.error ? '2px solid #f87171' : '1px solid #1e4a7a',
+                  background: '#0a1f3c',
+                  marginBottom: '1.25rem',
+                }}
+              >
+                <video
+                  src={videoDraft.previewUrl}
+                  controls={!videoDraft.uploading}
+                  muted
+                  playsInline
+                  style={{
+                    width: '100%',
+                    maxHeight: '280px',
+                    display: 'block',
+                    opacity: videoDraft.uploading ? 0.5 : 1,
+                  }}
+                />
+                {videoDraft.uploading && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'rgba(10,31,60,0.65)',
+                      color: '#94b4d4',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Envoi de la vidéo…
+                  </div>
+                )}
+                {videoDraft.error && (
+                  <div
+                    style={{
+                      padding: '0.75rem 1rem',
+                      background: 'rgba(127,29,29,0.35)',
+                      color: '#fecaca',
+                      fontSize: '0.875rem',
+                    }}
+                  >
+                    {videoDraft.error}
+                  </div>
+                )}
+                <div style={{ padding: '0.75rem 1rem', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button type="button" className="btn-outline" style={{ fontSize: '0.875rem' }} onClick={() => videoInputRef.current?.click()}>
+                    Remplacer
+                  </button>
+                  <button type="button" className="btn-outline" style={{ fontSize: '0.875rem' }} onClick={() => void removeVideo()}>
+                    Supprimer la vidéo
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div style={{ background: '#163660', border: '1px solid #1e4a7a', borderRadius: '10px', padding: '1.25rem' }}>
               <h3 style={{ fontWeight: 700, color: '#f0f4f8', margin: '0 0 1rem', fontSize: '0.9375rem' }}>Récapitulatif</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -721,9 +948,17 @@ export default function AddShopPage() {
               onClick={handleSubmit}
               className="btn-primary"
               style={{ fontSize: '0.9375rem' }}
-              disabled={submitting || photosUploading}
+              disabled={submitting || mediaUploading}
             >
-              {submitting ? '…' : photosUploading ? 'Envoi des photos…' : '✓ Soumettre mon commerce'}
+              {submitting
+                ? '…'
+                : mediaUploading
+                  ? photosUploading && videoUploading
+                    ? 'Envoi des médias…'
+                    : photosUploading
+                      ? 'Envoi des photos…'
+                      : 'Envoi de la vidéo…'
+                  : '✓ Soumettre mon commerce'}
             </button>
           )}
         </div>
