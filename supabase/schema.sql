@@ -96,6 +96,55 @@ create policy "reviews_insert_authenticated_approved_shop"
     )
   );
 
+-- Admin (profiles.role = 'admin'): modération complète
+grant delete on table public.shops to authenticated;
+
+create policy "shops_select_admin"
+  on public.shops for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
+create policy "shops_update_admin"
+  on public.shops for update
+  to authenticated
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
+create policy "shops_delete_admin"
+  on public.shops for delete
+  to authenticated
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
+create policy "reviews_select_admin"
+  on public.reviews for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
 -- ---------------------------------------------------------------------------
 -- New user → profile row
 -- ---------------------------------------------------------------------------

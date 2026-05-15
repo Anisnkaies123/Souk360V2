@@ -4,19 +4,35 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { fetchProfileRole } from '@/lib/profile-role';
 import { supabase } from '@/lib/supabase';
 
 export default function Navbar() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) {
+        const role = await fetchProfileRole(u.id);
+        setIsAdmin(role === 'admin');
+      } else {
+        setIsAdmin(false);
+      }
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) {
+        const role = await fetchProfileRole(u.id);
+        setIsAdmin(role === 'admin');
+      } else {
+        setIsAdmin(false);
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -30,6 +46,7 @@ export default function Navbar() {
     { href: '/', label: 'Accueil' },
     { href: '/search', label: 'Rechercher' },
     { href: '/add-shop', label: 'Ajouter' },
+    ...(isAdmin ? [{ href: '/admin', label: 'Admin' } as const] : []),
   ];
 
   return (
