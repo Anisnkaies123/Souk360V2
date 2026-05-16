@@ -30,9 +30,9 @@ const SHOP_SELECT =
   'id, name, category, description, phone, address, photos, video_url, whatsapp, hours, is_approved, owner_id, created_at';
 
 async function withTimeout<T>(label: string, query: PromiseLike<T>): Promise<T | null> {
-  let timeout: ReturnType<typeof window.setTimeout> | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   const timedOut = new Promise<null>((resolve) => {
-    timeout = window.setTimeout(() => {
+    timeout = setTimeout(() => {
       console.error(`${label} timed out`);
       resolve(null);
     }, 10000);
@@ -44,7 +44,7 @@ async function withTimeout<T>(label: string, query: PromiseLike<T>): Promise<T |
     console.error(`${label} failed`, err);
     return null;
   } finally {
-    if (timeout) window.clearTimeout(timeout);
+    if (timeout) clearTimeout(timeout);
   }
 }
 

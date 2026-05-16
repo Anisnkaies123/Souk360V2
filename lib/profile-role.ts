@@ -3,9 +3,9 @@ import { supabase } from '@/lib/supabase';
 export type ProfileRole = 'user' | 'owner' | 'admin';
 
 export async function fetchProfileRole(userId: string): Promise<ProfileRole | null> {
-  let timeout: ReturnType<typeof window.setTimeout> | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   const timedOut = new Promise<null>((resolve) => {
-    timeout = window.setTimeout(() => {
+    timeout = setTimeout(() => {
       console.error('profile role lookup timed out');
       resolve(null);
     }, 8000);
@@ -28,6 +28,6 @@ export async function fetchProfileRole(userId: string): Promise<ProfileRole | nu
     console.error('profile role lookup failed', err);
     return null;
   } finally {
-    if (timeout) window.clearTimeout(timeout);
+    if (timeout) clearTimeout(timeout);
   }
 }

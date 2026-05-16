@@ -35,7 +35,7 @@ export default function Navbar() {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      window.setTimeout(() => {
+      setTimeout(() => {
         void syncRole(u);
       }, 0);
     });
