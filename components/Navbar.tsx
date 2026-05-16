@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { fetchProfileRole } from '@/lib/profile-role';
@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -39,7 +40,10 @@ export default function Navbar() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
+    setUser(null);
+    setIsAdmin(false);
     setMenuOpen(false);
+    router.refresh();
   }
 
   const links = [

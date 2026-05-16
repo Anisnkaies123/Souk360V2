@@ -19,15 +19,18 @@ export default function HomePage() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [list, counts] = await Promise.all([fetchApprovedShops(), fetchPublicStats()]);
-      if (!cancelled) {
-        setShops(list);
-        setStats({
-          shopCount: counts.shopCount,
-          reviewCount: counts.reviewCount,
-          categoryCount: CATEGORIES.length,
-        });
-        setLoading(false);
+      try {
+        const [list, counts] = await Promise.all([fetchApprovedShops(), fetchPublicStats()]);
+        if (!cancelled) {
+          setShops(list);
+          setStats({
+            shopCount: counts.shopCount,
+            reviewCount: counts.reviewCount,
+            categoryCount: CATEGORIES.length,
+          });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
@@ -45,6 +48,7 @@ export default function HomePage() {
   }
 
   const featuredShops = shops.slice(0, 4);
+  const recentShops = shops.length > 4 ? shops.slice(4, 12) : [];
 
   const STATS = [
     { value: String(stats.shopCount), label: 'Commerces', icon: '🏪' },
@@ -168,7 +172,9 @@ export default function HomePage() {
                 }}
               >
                 <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>{stat.icon}</div>
-                <div style={{ fontWeight: 800, fontSize: '1.75rem', color: '#378ADD', lineHeight: 1 }}>{stat.value}</div>
+                <div style={{ fontWeight: 800, fontSize: '1.75rem', color: '#378ADD', lineHeight: 1 }}>
+                  {loading ? '…' : stat.value}
+                </div>
                 <div style={{ color: '#94b4d4', fontSize: '0.875rem', marginTop: '4px' }}>{stat.label}</div>
               </div>
             ))}
@@ -239,6 +245,31 @@ export default function HomePage() {
           </div>
         )}
       </section>
+
+      {recentShops.length > 0 ? (
+        <section style={{ padding: '0 16px 64px', maxWidth: '1100px', margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h2 style={{ fontWeight: 800, fontSize: '1.375rem', color: '#f0f4f8', margin: 0 }}>Récemment ajoutés</h2>
+            <Link href="/search" style={{ color: '#378ADD', fontSize: '0.875rem', fontWeight: 600, textDecoration: 'none' }}>
+              Voir tout →
+            </Link>
+          </div>
+          <p style={{ color: '#5a7fa8', fontSize: '0.875rem', margin: '-0.75rem 0 1.25rem' }}>
+            Derniers commerces validés sur Souk360 ({stats.shopCount} au total dans la base).
+          </p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+              gap: '1.25rem',
+            }}
+          >
+            {recentShops.map((shop) => (
+              <ShopCard key={shop.id} shop={shop} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section style={{ padding: '0 16px 80px', maxWidth: '1100px', margin: '0 auto' }}>
         <div

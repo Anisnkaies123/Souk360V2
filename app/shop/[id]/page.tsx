@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Shop } from '@/lib/data';
+import PhotoLightbox from '@/components/PhotoLightbox';
 import { fetchApprovedShopById, fetchReviewsForShop, type ReviewWithAuthor } from '@/lib/shops';
 
 const JS_WEEKDAY_TO_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'] as const;
@@ -71,6 +72,7 @@ export default function ShopProfilePage() {
   const [shop, setShop] = useState<Shop | null>(null);
   const [reviews, setReviews] = useState<ReviewWithAuthor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const todayFr = JS_WEEKDAY_TO_FR[new Date().getDay()];
 
@@ -302,19 +304,38 @@ export default function ShopProfilePage() {
             padding: '1.25rem',
           }}
         >
-          <h2 style={{ fontWeight: 700, fontSize: '1.125rem', color: '#f0f4f8', margin: '0 0 1rem' }}>📸 Photos</h2>
+          <h2 style={{ fontWeight: 700, fontSize: '1.125rem', color: '#f0f4f8', margin: '0 0 0.35rem' }}>📸 Photos</h2>
+          <p style={{ color: '#5a7fa8', fontSize: '0.8rem', margin: '0 0 1rem' }}>Cliquez sur une image pour l&apos;agrandir</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
             {shop.photos.map((photo, i) => (
-              <div key={i} style={{ borderRadius: '8px', overflow: 'hidden', aspectRatio: '4/3' }}>
+              <button
+                key={i}
+                type="button"
+                onClick={() => setLightboxIndex(i)}
+                style={{
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  aspectRatio: '4/3',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'zoom-in',
+                  display: 'block',
+                  width: '100%',
+                }}
+              >
                 <img
                   src={photo}
                   alt={`Photo ${i + 1}`}
                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                 />
-              </div>
+              </button>
             ))}
           </div>
         </div>
+
+        {lightboxIndex !== null ? (
+          <PhotoLightbox urls={shop.photos} initialIndex={lightboxIndex} onClose={() => setLightboxIndex(null)} />
+        ) : null}
 
         <div
           style={{

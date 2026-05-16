@@ -40,6 +40,11 @@ function SearchInner() {
     setSelectedCategory(searchParams.get('category') || '');
   }, [searchParams]);
 
+  /** Ancienne valeur 4.5★ retirée — ramener sur 4★ si besoin */
+  useEffect(() => {
+    setMinRating((m) => (m === 4.5 ? 4 : m));
+  }, []);
+
   const filtered = shops.filter((shop) => {
     const matchesQuery =
       query.trim() === '' ||
@@ -159,13 +164,13 @@ function SearchInner() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ color: '#94b4d4', fontSize: '0.875rem', fontWeight: 500 }}>Note min :</span>
-              {[0, 3, 4, 4.5].map((r) => (
+              {[0, 3, 4].map((r) => (
                 <button
                   key={r}
                   type="button"
                   onClick={() => setMinRating(r)}
                   style={{
-                    padding: '0.3rem 0.6rem',
+                    padding: '0.3rem 0.65rem',
                     borderRadius: '6px',
                     border: '1px solid',
                     borderColor: minRating === r ? '#378ADD' : '#1e4a7a',
@@ -176,7 +181,7 @@ function SearchInner() {
                     cursor: 'pointer',
                   }}
                 >
-                  {r === 0 ? 'Tous' : `${r}★+`}
+                  {r === 0 ? 'Toutes' : `${r}★+`}
                 </button>
               ))}
             </div>
@@ -264,7 +269,7 @@ function FilterSidebar({ openOnly, setOpenOnly, minRating, setMinRating, maxDist
       <div style={{ marginBottom: '1.25rem' }}>
         <p className="label">Note minimale</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {[{ v: 0, l: 'Tous' }, { v: 3, l: '3★ et plus' }, { v: 4, l: '4★ et plus' }, { v: 4.5, l: '4.5★ et plus' }].map(({ v, l }) => (
+          {[{ v: 0, l: 'Toutes les notes' }, { v: 3, l: '3★ et plus' }, { v: 4, l: '4★ et plus' }].map(({ v, l }) => (
             <label key={v} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
               <input type="radio" checked={minRating === v} onChange={() => setMinRating(v)} style={{ accentColor: '#378ADD' }} />
               <span style={{ color: '#94b4d4', fontSize: '0.875rem' }}>{l}</span>

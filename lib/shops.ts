@@ -220,14 +220,16 @@ function mapReviewRows(data: unknown): ReviewWithAuthor[] {
   return data.flatMap((row) => {
     if (!row || typeof row !== 'object') return [];
     const r = row as Record<string, unknown>;
-    return {
-      id: getStringField(r, 'id'),
-      shopId: getStringField(r, 'shop_id'),
-      author: reviewAuthorName(r.profiles),
-      rating: getNumberField(r, 'rating'),
-      date: getStringField(r, 'created_at'),
-      comment: getStringField(r, 'comment'),
-    };
+    return [
+      {
+        id: getStringField(r, 'id'),
+        shopId: getStringField(r, 'shop_id'),
+        author: reviewAuthorName(r.profiles),
+        rating: getNumberField(r, 'rating'),
+        date: getStringField(r, 'created_at'),
+        comment: getStringField(r, 'comment'),
+      },
+    ];
   });
 }
 

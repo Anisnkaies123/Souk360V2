@@ -60,43 +60,59 @@ export default function AdminPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (cancelled) return;
-      const u = session?.user ?? null;
-      setUser(u);
-      if (!u) {
-        router.replace(`/login?next=${encodeURIComponent('/admin')}`);
-        setAuthChecked(true);
-        return;
-      }
-      const role = await fetchProfileRole(u.id);
-      if (cancelled) return;
-      setIsAdmin(role === 'admin');
-      setAuthChecked(true);
-      if (role === 'admin') {
-        await loadData();
-      } else {
-        setLoading(false);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (cancelled) return;
+        const u = session?.user ?? null;
+        setUser(u);
+        if (!u) {
+          router.replace(`/login?next=${encodeURIComponent('/admin')}`);
+          setLoading(false);
+          return;
+        }
+        const role = await fetchProfileRole(u.id);
+        if (cancelled) return;
+        setIsAdmin(role === 'admin');
+        if (role === 'admin') {
+          await loadData();
+        } else {
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setLoading(false);
+          setIsAdmin(false);
+        }
+      } finally {
+        if (!cancelled) setAuthChecked(true);
       }
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (!u) {
-        router.replace(`/login?next=${encodeURIComponent('/admin')}`);
+      try {
+        const u = session?.user ?? null;
+        setUser(u);
+        if (!u) {
+          router.replace(`/login?next=${encodeURIComponent('/admin')}`);
+          setIsAdmin(false);
+          setLoading(false);
+          setAuthChecked(true);
+          return;
+        }
+        const role = await fetchProfileRole(u.id);
+        setIsAdmin(role === 'admin');
+        if (role === 'admin') {
+          await loadData();
+        } else {
+          setLoading(false);
+        }
+      } catch {
+        setLoading(false);
         setIsAdmin(false);
-        setLoading(false);
-        return;
-      }
-      const role = await fetchProfileRole(u.id);
-      setIsAdmin(role === 'admin');
-      if (role === 'admin') {
-        await loadData();
-      } else {
-        setLoading(false);
+      } finally {
+        setAuthChecked(true);
       }
     });
     return () => {
@@ -143,10 +159,10 @@ export default function AdminPage() {
     await loadData();
   }
 
-  if (!authChecked || (!user && loading)) {
+  if (!authChecked) {
     return (
       <main style={{ maxWidth: '960px', margin: '0 auto', padding: '80px 16px', textAlign: 'center', color: '#94b4d4' }}>
-        Vérification…
+        Vérification de la session…
       </main>
     );
   }

@@ -64,8 +64,14 @@ create policy "profiles_update_own"
   using (auth.uid() = id)
   with check (auth.uid() = id);
 
-create policy "shops_select_public_or_owner"
+create policy "shops_select_anon_approved"
   on public.shops for select
+  to anon
+  using (is_approved = true);
+
+create policy "shops_select_authenticated_public_or_owner"
+  on public.shops for select
+  to authenticated
   using (is_approved = true or auth.uid() = owner_id);
 
 create policy "shops_insert_authenticated_owner"
