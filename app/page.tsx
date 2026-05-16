@@ -48,7 +48,7 @@ export default function HomePage() {
   }
 
   const featuredShops = shops.slice(0, 4);
-  const recentShops = shops.length > 4 ? shops.slice(4, 12) : [];
+  const recentShops = shops.slice(0, 8);
 
   const STATS = [
     { value: String(stats.shopCount), label: 'Commerces', icon: '🏪' },
@@ -246,7 +246,7 @@ export default function HomePage() {
         )}
       </section>
 
-      {recentShops.length > 0 ? (
+      {!loading && recentShops.length > 0 ? (
         <section style={{ padding: '0 16px 64px', maxWidth: '1100px', margin: '0 auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h2 style={{ fontWeight: 800, fontSize: '1.375rem', color: '#f0f4f8', margin: 0 }}>Récemment ajoutés</h2>

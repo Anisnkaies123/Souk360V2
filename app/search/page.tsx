@@ -24,10 +24,15 @@ function SearchInner() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const list = await fetchApprovedShops();
-      if (!cancelled) {
-        setShops(list);
-        setLoading(false);
+      try {
+        const list = await fetchApprovedShops();
+        if (!cancelled) {
+          setShops(list);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     })();
     return () => {

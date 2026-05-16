@@ -20,6 +20,20 @@ function categoryLabel(slug: string): string {
   return CATEGORIES.find((c) => c.value === slug)?.label ?? slug;
 }
 
+async function withAdminTimeout<T>(label: string, run: (signal: AbortSignal) => PromiseLike<T>): Promise<T | null> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 10000);
+
+  try {
+    return await run(controller.signal);
+  } catch (err) {
+    console.error(`${label} failed`, err);
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
@@ -36,11 +50,33 @@ export default function AdminPage() {
     setActionError('');
 
     const [shopsRes, totalRes, pendingRes, reviewsRes] = await Promise.all([
-      supabase.from('shops').select('id, name, category, is_approved, created_at').order('created_at', { ascending: false }),
-      supabase.from('shops').select('id', { count: 'exact', head: true }),
-      supabase.from('shops').select('id', { count: 'exact', head: true }).eq('is_approved', false),
-      supabase.from('reviews').select('id', { count: 'exact', head: true }),
+      withAdminTimeout('admin shops', (signal) =>
+        supabase
+          .from('shops')
+          .select('id, name, category, is_approved, created_at')
+          .order('created_at', { ascending: false })
+          .abortSignal(signal),
+      ),
+      withAdminTimeout('admin shop count', (signal) =>
+        supabase.from('shops').select('id', { count: 'exact', head: true }).abortSignal(signal),
+      ),
+      withAdminTimeout('admin pending shop count', (signal) =>
+        supabase
+          .from('shops')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_approved', false)
+          .abortSignal(signal),
+      ),
+      withAdminTimeout('admin review count', (signal) =>
+        supabase.from('reviews').select('id', { count: 'exact', head: true }).abortSignal(signal),
+      ),
     ]);
+
+    if (!shopsRes) {
+      setActionError('Impossible de charger le tableau de bord. Vérifiez les politiques RLS Supabase.');
+      setLoading(false);
+      return;
+    }
 
     if (shopsRes.error) {
       setActionError(shopsRes.error.message);
@@ -50,70 +86,59 @@ export default function AdminPage() {
 
     setShops((shopsRes.data as AdminShopRow[]) ?? []);
     setStats({
-      totalShops: totalRes.count ?? 0,
-      pendingShops: pendingRes.count ?? 0,
-      totalReviews: reviewsRes.count ?? 0,
+      totalShops: totalRes?.count ?? 0,
+      pendingShops: pendingRes?.count ?? 0,
+      totalReviews: reviewsRes?.count ?? 0,
     });
     setLoading(false);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
+
+    async function syncAdminState(u: User | null) {
+      if (!u) {
+        router.replace(`/login?next=${encodeURIComponent('/admin')}`);
+        setUser(null);
+        setIsAdmin(false);
+        setLoading(false);
+        setAuthChecked(true);
+        return;
+      }
+
+      setUser(u);
+      setAuthChecked(true);
+      setLoading(true);
+      const role = await fetchProfileRole(u.id);
+      if (cancelled) return;
+      setIsAdmin(role === 'admin');
+      if (role === 'admin') {
+        await loadData();
+      } else {
+        setLoading(false);
+      }
+    }
+
     (async () => {
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession();
         if (cancelled) return;
-        const u = session?.user ?? null;
-        setUser(u);
-        if (!u) {
-          router.replace(`/login?next=${encodeURIComponent('/admin')}`);
-          setLoading(false);
-          return;
-        }
-        const role = await fetchProfileRole(u.id);
-        if (cancelled) return;
-        setIsAdmin(role === 'admin');
-        if (role === 'admin') {
-          await loadData();
-        } else {
-          setLoading(false);
-        }
+        await syncAdminState(session?.user ?? null);
       } catch {
         if (!cancelled) {
           setLoading(false);
           setIsAdmin(false);
+          setAuthChecked(true);
         }
-      } finally {
-        if (!cancelled) setAuthChecked(true);
       }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      try {
-        const u = session?.user ?? null;
-        setUser(u);
-        if (!u) {
-          router.replace(`/login?next=${encodeURIComponent('/admin')}`);
-          setIsAdmin(false);
-          setLoading(false);
-          setAuthChecked(true);
-          return;
-        }
-        const role = await fetchProfileRole(u.id);
-        setIsAdmin(role === 'admin');
-        if (role === 'admin') {
-          await loadData();
-        } else {
-          setLoading(false);
-        }
-      } catch {
-        setLoading(false);
-        setIsAdmin(false);
-      } finally {
-        setAuthChecked(true);
-      }
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      window.setTimeout(() => {
+        void syncAdminState(session?.user ?? null);
+      }, 0);
     });
     return () => {
       cancelled = true;

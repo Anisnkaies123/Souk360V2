@@ -15,27 +15,34 @@ export default function Navbar() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    let cancelled = false;
+
+    async function syncRole(u: User | null) {
+      if (!u) {
+        setIsAdmin(false);
+        return;
+      }
+      const role = await fetchProfileRole(u.id);
+      if (!cancelled) setIsAdmin(role === 'admin');
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null;
       setUser(u);
-      if (u) {
-        const role = await fetchProfileRole(u.id);
-        setIsAdmin(role === 'admin');
-      } else {
-        setIsAdmin(false);
-      }
+      void syncRole(u);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      if (u) {
-        const role = await fetchProfileRole(u.id);
-        setIsAdmin(role === 'admin');
-      } else {
-        setIsAdmin(false);
-      }
+      window.setTimeout(() => {
+        void syncRole(u);
+      }, 0);
     });
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   async function handleLogout() {
@@ -43,6 +50,7 @@ export default function Navbar() {
     setUser(null);
     setIsAdmin(false);
     setMenuOpen(false);
+    router.push('/');
     router.refresh();
   }
 

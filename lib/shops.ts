@@ -29,6 +29,20 @@ export type ShopRow = {
 const SHOP_SELECT =
   'id, name, category, description, phone, address, photos, video_url, whatsapp, hours, is_approved, owner_id, created_at';
 
+async function withTimeout<T>(label: string, run: (signal: AbortSignal) => PromiseLike<T>): Promise<T | null> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 10000);
+
+  try {
+    return await run(controller.signal);
+  } catch (err) {
+    console.error(`${label} failed`, err);
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 function parseHours(raw: unknown): Record<string, HoursEntry> | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   return raw as Record<string, HoursEntry>;
@@ -123,10 +137,15 @@ async function reviewStatsForShopIds(
 ): Promise<Map<string, { sum: number; count: number }>> {
   const stats = new Map<string, { sum: number; count: number }>();
   if (shopIds.length === 0) return stats;
-  const { data: revs, error } = await supabase
-    .from('reviews')
-    .select('shop_id, rating')
-    .in('shop_id', shopIds);
+  const result = await withTimeout('review stats', (signal) =>
+    supabase
+      .from('reviews')
+      .select('shop_id, rating')
+      .in('shop_id', shopIds)
+      .abortSignal(signal),
+  );
+  if (!result) return stats;
+  const { data: revs, error } = result;
   if (error || !revs) return stats;
   for (const r of normalizeReviewStatRows(revs)) {
     const cur = stats.get(r.shop_id) || { sum: 0, count: 0 };
@@ -147,11 +166,16 @@ function normalizeReviewStatRows(rows: unknown): { shop_id: string; rating: numb
 }
 
 export async function fetchApprovedShops(): Promise<Shop[]> {
-  const { data: rows, error } = await supabase
-    .from('shops')
-    .select(SHOP_SELECT)
-    .eq('is_approved', true)
-    .order('created_at', { ascending: false });
+  const result = await withTimeout('approved shops', (signal) =>
+    supabase
+      .from('shops')
+      .select(SHOP_SELECT)
+      .eq('is_approved', true)
+      .order('created_at', { ascending: false })
+      .abortSignal(signal),
+  );
+  if (!result) return [];
+  const { data: rows, error } = result;
 
   if (error || !rows?.length) return [];
 
@@ -166,12 +190,17 @@ export async function fetchApprovedShops(): Promise<Shop[]> {
 }
 
 export async function fetchApprovedShopById(id: string): Promise<Shop | null> {
-  const { data: row, error } = await supabase
-    .from('shops')
-    .select(SHOP_SELECT)
-    .eq('id', id)
-    .eq('is_approved', true)
-    .maybeSingle();
+  const result = await withTimeout('approved shop detail', (signal) =>
+    supabase
+      .from('shops')
+      .select(SHOP_SELECT)
+      .eq('id', id)
+      .eq('is_approved', true)
+      .maybeSingle()
+      .abortSignal(signal),
+  );
+  if (!result) return null;
+  const { data: row, error } = result;
 
   if (error || !row) return null;
 
@@ -234,11 +263,16 @@ function mapReviewRows(data: unknown): ReviewWithAuthor[] {
 }
 
 export async function fetchReviewsForShop(shopId: string): Promise<ReviewWithAuthor[]> {
-  const { data, error } = await supabase
-    .from('reviews')
-    .select('id, shop_id, user_id, rating, comment, created_at, profiles(full_name)')
-    .eq('shop_id', shopId)
-    .order('created_at', { ascending: false });
+  const result = await withTimeout('shop reviews', (signal) =>
+    supabase
+      .from('reviews')
+      .select('id, shop_id, user_id, rating, comment, created_at, profiles(full_name)')
+      .eq('shop_id', shopId)
+      .order('created_at', { ascending: false })
+      .abortSignal(signal),
+  );
+  if (!result) return [];
+  const { data, error } = result;
 
   if (error || !data) return [];
 
@@ -249,17 +283,21 @@ export async function fetchPublicStats(): Promise<{
   shopCount: number;
   reviewCount: number;
 }> {
-  const shops = await supabase
-    .from('shops')
-    .select('id', { count: 'exact', head: true })
-    .eq('is_approved', true);
-
-  const reviews = await supabase
-    .from('reviews')
-    .select('id', { count: 'exact', head: true });
+  const [shops, reviews] = await Promise.all([
+    withTimeout('shop count', (signal) =>
+      supabase
+        .from('shops')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_approved', true)
+        .abortSignal(signal),
+    ),
+    withTimeout('review count', (signal) =>
+      supabase.from('reviews').select('id', { count: 'exact', head: true }).abortSignal(signal),
+    ),
+  ]);
 
   return {
-    shopCount: shops.count ?? 0,
-    reviewCount: reviews.count ?? 0,
+    shopCount: shops?.count ?? 0,
+    reviewCount: reviews?.count ?? 0,
   };
 }
