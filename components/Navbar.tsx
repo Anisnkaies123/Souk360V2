@@ -58,6 +58,7 @@ export default function Navbar() {
     { href: '/', label: 'Accueil' },
     { href: '/search', label: 'Rechercher' },
     { href: '/add-shop', label: 'Ajouter' },
+    ...(user ? [{ href: '/dashboard', label: 'Dashboard' } as const] : []),
     ...(isAdmin ? [{ href: '/admin', label: 'Admin' } as const] : []),
   ];
 
