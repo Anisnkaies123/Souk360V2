@@ -297,7 +297,7 @@ export default function AddShopPage() {
     setSubmitError('');
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('shops').insert({
+      const { data, error } = await supabase.from('shops').insert({
         name: form.name.trim(),
         category: form.category,
         description: form.description.trim(),
@@ -313,8 +313,9 @@ export default function AddShopPage() {
       });
 
       if (error) {
+        console.error('SUPABASE INSERT ERROR:', JSON.stringify(error, null, 2));
+        alert('Error: ' + error.message + ' | Code: ' + error.code + ' | Details: ' + error.details);
         setSubmitError("Impossible d'enregistrer votre commerce. Veuillez réessayer.");
-        console.error('Shop insert failed', error);
         return;
       }
 
