@@ -20,17 +20,22 @@ function categoryLabel(slug: string): string {
   return CATEGORIES.find((c) => c.value === slug)?.label ?? slug;
 }
 
-async function withAdminTimeout<T>(label: string, run: (signal: AbortSignal) => PromiseLike<T>): Promise<T | null> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 10000);
+async function withAdminTimeout<T>(label: string, query: PromiseLike<T>): Promise<T | null> {
+  let timeout: ReturnType<typeof window.setTimeout> | undefined;
+  const timedOut = new Promise<null>((resolve) => {
+    timeout = window.setTimeout(() => {
+      console.error(`${label} timed out`);
+      resolve(null);
+    }, 10000);
+  });
 
   try {
-    return await run(controller.signal);
+    return await Promise.race([Promise.resolve(query), timedOut]);
   } catch (err) {
     console.error(`${label} failed`, err);
     return null;
   } finally {
-    window.clearTimeout(timeout);
+    if (timeout) window.clearTimeout(timeout);
   }
 }
 
@@ -50,25 +55,27 @@ export default function AdminPage() {
     setActionError('');
 
     const [shopsRes, totalRes, pendingRes, reviewsRes] = await Promise.all([
-      withAdminTimeout('admin shops', (signal) =>
+      withAdminTimeout(
+        'admin shops',
         supabase
           .from('shops')
           .select('id, name, category, is_approved, created_at')
-          .order('created_at', { ascending: false })
-          .abortSignal(signal),
+          .order('created_at', { ascending: false }),
       ),
-      withAdminTimeout('admin shop count', (signal) =>
-        supabase.from('shops').select('id', { count: 'exact', head: true }).abortSignal(signal),
+      withAdminTimeout(
+        'admin shop count',
+        supabase.from('shops').select('id', { count: 'exact', head: true }),
       ),
-      withAdminTimeout('admin pending shop count', (signal) =>
+      withAdminTimeout(
+        'admin pending shop count',
         supabase
           .from('shops')
           .select('id', { count: 'exact', head: true })
-          .eq('is_approved', false)
-          .abortSignal(signal),
+          .eq('is_approved', false),
       ),
-      withAdminTimeout('admin review count', (signal) =>
-        supabase.from('reviews').select('id', { count: 'exact', head: true }).abortSignal(signal),
+      withAdminTimeout(
+        'admin review count',
+        supabase.from('reviews').select('id', { count: 'exact', head: true }),
       ),
     ]);
 

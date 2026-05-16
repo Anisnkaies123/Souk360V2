@@ -29,17 +29,22 @@ export type ShopRow = {
 const SHOP_SELECT =
   'id, name, category, description, phone, address, photos, video_url, whatsapp, hours, is_approved, owner_id, created_at';
 
-async function withTimeout<T>(label: string, run: (signal: AbortSignal) => PromiseLike<T>): Promise<T | null> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 10000);
+async function withTimeout<T>(label: string, query: PromiseLike<T>): Promise<T | null> {
+  let timeout: ReturnType<typeof window.setTimeout> | undefined;
+  const timedOut = new Promise<null>((resolve) => {
+    timeout = window.setTimeout(() => {
+      console.error(`${label} timed out`);
+      resolve(null);
+    }, 10000);
+  });
 
   try {
-    return await run(controller.signal);
+    return await Promise.race([Promise.resolve(query), timedOut]);
   } catch (err) {
     console.error(`${label} failed`, err);
     return null;
   } finally {
-    window.clearTimeout(timeout);
+    if (timeout) window.clearTimeout(timeout);
   }
 }
 
@@ -137,12 +142,12 @@ async function reviewStatsForShopIds(
 ): Promise<Map<string, { sum: number; count: number }>> {
   const stats = new Map<string, { sum: number; count: number }>();
   if (shopIds.length === 0) return stats;
-  const result = await withTimeout('review stats', (signal) =>
+  const result = await withTimeout(
+    'review stats',
     supabase
       .from('reviews')
       .select('shop_id, rating')
-      .in('shop_id', shopIds)
-      .abortSignal(signal),
+      .in('shop_id', shopIds),
   );
   if (!result) return stats;
   const { data: revs, error } = result;
@@ -166,13 +171,13 @@ function normalizeReviewStatRows(rows: unknown): { shop_id: string; rating: numb
 }
 
 export async function fetchApprovedShops(): Promise<Shop[]> {
-  const result = await withTimeout('approved shops', (signal) =>
+  const result = await withTimeout(
+    'approved shops',
     supabase
       .from('shops')
       .select(SHOP_SELECT)
       .eq('is_approved', true)
-      .order('created_at', { ascending: false })
-      .abortSignal(signal),
+      .order('created_at', { ascending: false }),
   );
   if (!result) return [];
   const { data: rows, error } = result;
@@ -190,14 +195,14 @@ export async function fetchApprovedShops(): Promise<Shop[]> {
 }
 
 export async function fetchApprovedShopById(id: string): Promise<Shop | null> {
-  const result = await withTimeout('approved shop detail', (signal) =>
+  const result = await withTimeout(
+    'approved shop detail',
     supabase
       .from('shops')
       .select(SHOP_SELECT)
       .eq('id', id)
       .eq('is_approved', true)
-      .maybeSingle()
-      .abortSignal(signal),
+      .maybeSingle(),
   );
   if (!result) return null;
   const { data: row, error } = result;
@@ -263,13 +268,13 @@ function mapReviewRows(data: unknown): ReviewWithAuthor[] {
 }
 
 export async function fetchReviewsForShop(shopId: string): Promise<ReviewWithAuthor[]> {
-  const result = await withTimeout('shop reviews', (signal) =>
+  const result = await withTimeout(
+    'shop reviews',
     supabase
       .from('reviews')
       .select('id, shop_id, user_id, rating, comment, created_at, profiles(full_name)')
       .eq('shop_id', shopId)
-      .order('created_at', { ascending: false })
-      .abortSignal(signal),
+      .order('created_at', { ascending: false }),
   );
   if (!result) return [];
   const { data, error } = result;
@@ -284,16 +289,14 @@ export async function fetchPublicStats(): Promise<{
   reviewCount: number;
 }> {
   const [shops, reviews] = await Promise.all([
-    withTimeout('shop count', (signal) =>
+    withTimeout(
+      'shop count',
       supabase
         .from('shops')
         .select('id', { count: 'exact', head: true })
-        .eq('is_approved', true)
-        .abortSignal(signal),
+        .eq('is_approved', true),
     ),
-    withTimeout('review count', (signal) =>
-      supabase.from('reviews').select('id', { count: 'exact', head: true }).abortSignal(signal),
-    ),
+    withTimeout('review count', supabase.from('reviews').select('id', { count: 'exact', head: true })),
   ]);
 
   return {
