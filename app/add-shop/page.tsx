@@ -276,7 +276,16 @@ export default function AddShopPage() {
   }
 
   async function handleSubmit() {
-    if (!user) return;
+    const {
+      data: { user: currentUser },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !currentUser) {
+      setSubmitError('Vous devez être connecté pour soumettre un commerce.');
+      router.replace(`/login?next=${encodeURIComponent('/add-shop')}`);
+      return;
+    }
     if (photosUploading) {
       setSubmitError('Veuillez attendre la fin du téléversement des photos.');
       return;
@@ -287,25 +296,35 @@ export default function AddShopPage() {
     }
     setSubmitError('');
     setSubmitting(true);
-    const { error } = await supabase.from('shops').insert({
-      name: form.name.trim(),
-      category: form.category,
-      description: form.description.trim(),
-      phone: form.phone.trim(),
-      address: form.address.trim(),
-      whatsapp: form.whatsapp.trim() || null,
-      hours: form.hours,
-      photos: uploadedPhotoUrls.length > 0 ? uploadedPhotoUrls : [],
-      video_url: videoDraft?.publicUrl && !videoDraft.error ? videoDraft.publicUrl : null,
-      owner_id: user.id,
-      is_approved: false,
-    });
-    setSubmitting(false);
-    if (error) {
-      setSubmitError(error.message || 'Impossible d’enregistrer le commerce.');
-      return;
+    try {
+      const { error } = await supabase.from('shops').insert({
+        name: form.name.trim(),
+        category: form.category,
+        description: form.description.trim(),
+        phone: form.phone.trim(),
+        address: form.address.trim(),
+        whatsapp: form.whatsapp.trim() || null,
+        city: 'Bizerte',
+        working_hours: form.hours,
+        photos: uploadedPhotoUrls.length > 0 ? uploadedPhotoUrls : [],
+        owner_id: currentUser.id,
+        is_verified: false,
+        is_approved: false,
+      });
+
+      if (error) {
+        setSubmitError("Impossible d'enregistrer votre commerce. Veuillez réessayer.");
+        console.error('Shop insert failed', error);
+        return;
+      }
+
+      setSubmitted(true);
+    } catch (error) {
+      setSubmitError("Impossible d'enregistrer votre commerce. Veuillez réessayer.");
+      console.error('Shop insert failed', error);
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitted(true);
   }
 
   const STEPS = [
@@ -330,8 +349,7 @@ export default function AddShopPage() {
           Commerce soumis !
         </h1>
         <p style={{ color: '#94b4d4', lineHeight: 1.7, marginBottom: '2rem' }}>
-          Votre commerce <strong style={{ color: '#f0f4f8' }}>{form.name}</strong> a été enregistré et sera visible après
-          validation par l&apos;équipe Souk360.
+          Votre commerce a été soumis et sera visible après validation par notre équipe.
         </p>
         <button onClick={() => router.push('/')} className="btn-primary" style={{ fontSize: '1rem' }}>
           Retour à l&apos;accueil

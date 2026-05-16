@@ -18,16 +18,16 @@ export type ShopRow = {
   phone: string | null;
   address: string | null;
   photos: string[] | null;
-  video_url: string | null;
   whatsapp: string | null;
-  hours: Record<string, HoursEntry> | null;
+  working_hours: Record<string, HoursEntry> | null;
+  is_verified: boolean;
   is_approved: boolean;
   owner_id: string | null;
   created_at: string;
 };
 
 const SHOP_SELECT =
-  'id, name, category, description, phone, address, photos, video_url, whatsapp, hours, is_approved, owner_id, created_at';
+  'id, name, category, description, phone, address, photos, whatsapp, working_hours, is_verified, is_approved, owner_id, created_at';
 
 async function withTimeout<T>(label: string, query: PromiseLike<T>): Promise<T | null> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -55,7 +55,7 @@ function parseHours(raw: unknown): Record<string, HoursEntry> | null {
 
 function normalizeShopRows(rows: unknown[]): ShopRow[] {
   return rows.map((row) => {
-    const r = row as ShopRow & { hours?: unknown };
+    const r = row as ShopRow & { working_hours?: unknown };
     return {
       id: r.id,
       name: r.name,
@@ -64,10 +64,9 @@ function normalizeShopRows(rows: unknown[]): ShopRow[] {
       phone: r.phone ?? null,
       address: r.address ?? null,
       photos: Array.isArray(r.photos) ? r.photos : null,
-      video_url:
-        typeof r.video_url === 'string' && r.video_url.trim().length > 0 ? r.video_url.trim() : null,
       whatsapp: r.whatsapp ?? null,
-      hours: parseHours(r.hours),
+      working_hours: parseHours(r.working_hours),
+      is_verified: Boolean(r.is_verified),
       is_approved: Boolean(r.is_approved),
       owner_id: r.owner_id ?? null,
       created_at: r.created_at,
@@ -114,7 +113,7 @@ function mapRowToShop(
   const photos =
     row.photos && row.photos.length > 0 ? row.photos : [PLACEHOLDER_SHOP_IMAGE];
   const avg = stats.count > 0 ? Math.round(stats.avg * 10) / 10 : 0;
-  const hoursJson = row.hours;
+  const hoursJson = row.working_hours;
 
   return {
     id: row.id,
@@ -128,11 +127,11 @@ function mapRowToShop(
     rating: avg,
     reviewCount: stats.count,
     isOpen: computeIsOpen(hoursJson),
-    isVerified: row.is_approved,
+    isVerified: row.is_verified,
     description: row.description ?? '',
     hours: mapHoursJson(hoursJson),
     photos,
-    videoUrl: row.video_url,
+    videoUrl: null,
     distance,
   };
 }
