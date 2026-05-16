@@ -21,9 +21,9 @@ function categoryLabel(slug: string): string {
 }
 
 async function withAdminTimeout<T>(label: string, query: PromiseLike<T>): Promise<T | null> {
-  let timeout: ReturnType<typeof window.setTimeout> | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   const timedOut = new Promise<null>((resolve) => {
-    timeout = window.setTimeout(() => {
+    timeout = setTimeout(() => {
       console.error(`${label} timed out`);
       resolve(null);
     }, 10000);
@@ -35,7 +35,7 @@ async function withAdminTimeout<T>(label: string, query: PromiseLike<T>): Promis
     console.error(`${label} failed`, err);
     return null;
   } finally {
-    if (timeout) window.clearTimeout(timeout);
+    if (timeout) clearTimeout(timeout);
   }
 }
 
@@ -143,7 +143,7 @@ export default function AdminPage() {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      window.setTimeout(() => {
+      setTimeout(() => {
         void syncAdminState(session?.user ?? null);
       }, 0);
     });
