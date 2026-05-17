@@ -7,6 +7,7 @@ export const PLACEHOLDER_SHOP_IMAGE =
 
 const DISPLAY_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'] as const;
 const JS_WEEKDAY_TO_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'] as const;
+const BIZERTE_CENTER = { lat: 37.2746, lng: 9.8739 };
 
 export type HoursEntry = { open: boolean; from: string; to: string };
 
@@ -17,6 +18,8 @@ export type ShopRow = {
   description: string | null;
   phone: string | null;
   address: string | null;
+  lat: number | null;
+  lng: number | null;
   photos: string[] | null;
   whatsapp: string | null;
   working_hours: Record<string, HoursEntry> | null;
@@ -28,7 +31,7 @@ export type ShopRow = {
 };
 
 const SHOP_SELECT =
-  'id, name, category, description, phone, address, photos, whatsapp, working_hours, is_verified, is_approved, accepts_bookings, owner_id, created_at';
+  'id, name, category, description, phone, address, lat, lng, photos, whatsapp, working_hours, is_verified, is_approved, accepts_bookings, owner_id, created_at';
 
 async function withTimeout<T>(label: string, query: PromiseLike<T>): Promise<T | null> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -64,6 +67,8 @@ function normalizeShopRows(rows: unknown[]): ShopRow[] {
       description: r.description ?? null,
       phone: r.phone ?? null,
       address: r.address ?? null,
+      lat: typeof r.lat === 'number' ? r.lat : null,
+      lng: typeof r.lng === 'number' ? r.lng : null,
       photos: Array.isArray(r.photos) ? r.photos : null,
       whatsapp: r.whatsapp ?? null,
       working_hours: parseHours(r.working_hours),
@@ -124,6 +129,8 @@ function mapRowToShop(
     categorySlug: row.category,
     categoryIcon: cat?.icon ?? '🏪',
     address: row.address ?? '',
+    lat: row.lat ?? BIZERTE_CENTER.lat,
+    lng: row.lng ?? BIZERTE_CENTER.lng,
     phone: row.phone ?? '',
     whatsapp: row.whatsapp ?? row.phone ?? '',
     rating: avg,

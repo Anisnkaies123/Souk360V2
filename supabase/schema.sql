@@ -26,6 +26,8 @@ create table public.shops (
   video_url text,
   whatsapp text,
   hours jsonb,
+  lat float,
+  lng float,
   accepts_bookings boolean default false,
   is_approved boolean not null default false,
   owner_id uuid references auth.users (id) on delete set null,

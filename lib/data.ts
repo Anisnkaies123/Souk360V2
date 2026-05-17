@@ -7,6 +7,8 @@ export type Shop = {
   categorySlug: string;
   categoryIcon: string;
   address: string;
+  lat?: number;
+  lng?: number;
   phone: string;
   whatsapp: string;
   rating: number;
