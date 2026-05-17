@@ -5,7 +5,9 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Shop } from '@/lib/data';
 import PhotoLightbox from '@/components/PhotoLightbox';
+import { formatPostDate, POST_TYPE_META, type PostRow } from '@/lib/posts';
 import { fetchApprovedShopById, fetchReviewsForShop, type ReviewWithAuthor } from '@/lib/shops';
+import { supabase } from '@/lib/supabase';
 
 const JS_WEEKDAY_TO_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'] as const;
 
@@ -71,6 +73,7 @@ export default function ShopProfilePage() {
   const id = typeof params.id === 'string' ? params.id : params.id?.[0];
   const [shop, setShop] = useState<Shop | null>(null);
   const [reviews, setReviews] = useState<ReviewWithAuthor[]>([]);
+  const [posts, setPosts] = useState<PostRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
@@ -81,10 +84,20 @@ export default function ShopProfilePage() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [s, r] = await Promise.all([fetchApprovedShopById(id), fetchReviewsForShop(id)]);
+      const [s, r, p] = await Promise.all([
+        fetchApprovedShopById(id),
+        fetchReviewsForShop(id),
+        supabase.from('posts').select('*').eq('shop_id', id).order('created_at', { ascending: false }).limit(5),
+      ]);
       if (!cancelled) {
         setShop(s);
         setReviews(r);
+        if (p.error) {
+          console.error('Shop posts fetch error:', p.error);
+          setPosts([]);
+        } else {
+          setPosts((p.data as PostRow[]) ?? []);
+        }
         setLoading(false);
       }
     })();
@@ -397,6 +410,54 @@ export default function ShopProfilePage() {
             })}
           </div>
         </div>
+
+        {posts.length > 0 ? (
+          <div className="card" style={{ padding: '1.25rem' }}>
+            <h2 style={{ fontWeight: 700, fontSize: '1.125rem', color: '#f0f4f8', margin: '0 0 1rem' }}>
+              📢 Actualités & Annonces
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {posts.map((post) => {
+                const meta = POST_TYPE_META[post.type] ?? POST_TYPE_META.annonce;
+                return (
+                  <article
+                    key={post.id}
+                    style={{
+                      background: '#163660',
+                      border: '1px solid #1e4a7a',
+                      borderRadius: '10px',
+                      padding: '1rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          borderRadius: '999px',
+                          padding: '0.25rem 0.7rem',
+                          background: meta.color,
+                          color: '#ffffff',
+                          fontSize: '0.75rem',
+                          fontWeight: 800,
+                        }}
+                      >
+                        {meta.label}
+                      </span>
+                      <span style={{ color: '#5a7fa8', fontSize: '0.8rem' }}>{formatPostDate(post.created_at)}</span>
+                    </div>
+                    <h3 style={{ color: '#f0f4f8', fontWeight: 800, fontSize: '1rem', margin: '0 0 0.5rem' }}>
+                      {post.title}
+                    </h3>
+                    <p style={{ color: '#94b4d4', lineHeight: 1.65, margin: 0, fontSize: '0.925rem' }}>
+                      {post.content}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
 
         <div
           style={{

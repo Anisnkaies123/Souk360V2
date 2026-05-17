@@ -253,6 +253,13 @@ export default function DashboardPage() {
                 >
                   Modifier
                 </Link>
+                <Link
+                  href={`/dashboard/shops/${shop.id}/posts`}
+                  className="btn-outline"
+                  style={{ fontSize: '0.8125rem', padding: '0.375rem 0.875rem' }}
+                >
+                  📢 Annonces
+                </Link>
               </div>
             </div>
           ))}
