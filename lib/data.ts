@@ -14,6 +14,8 @@ export type Shop = {
   isOpen: boolean;
   isVerified: boolean;
   description: string;
+  accepts_bookings?: boolean;
+  ownerId?: string;
   hours: { day: string; time: string }[];
   photos: string[];
   /** Public Supabase Storage URL for an optional promo video */

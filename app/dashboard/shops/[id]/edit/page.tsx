@@ -20,6 +20,7 @@ type Shop = {
   whatsapp: string;
   address: string;
   working_hours: Record<string, HoursEntry>;
+  accepts_bookings: boolean;
   owner_id: string;
 };
 
@@ -44,6 +45,7 @@ export default function EditShopPage() {
     whatsapp: '',
     address: '',
     working_hours: {} as Record<string, HoursEntry>,
+    accepts_bookings: false,
   });
 
   useEffect(() => {
@@ -89,6 +91,7 @@ export default function EditShopPage() {
         whatsapp: shopData.whatsapp || '',
         address: shopData.address || '',
         working_hours: (shopData.working_hours as Record<string, HoursEntry>) || {},
+        accepts_bookings: Boolean(shopData.accepts_bookings),
       });
       setLoading(false);
     }
@@ -129,6 +132,7 @@ export default function EditShopPage() {
         whatsapp: form.whatsapp.trim() || null,
         address: form.address.trim(),
         working_hours: form.working_hours,
+        accepts_bookings: form.accepts_bookings,
       })
       .eq('id', shopId)
       .eq('owner_id', user.id);
@@ -384,6 +388,67 @@ export default function EditShopPage() {
               </div>
             );
           })}
+        </div>
+
+        {/* Online bookings */}
+        <div
+          style={{
+            background: '#163660',
+            border: '1px solid #1e4a7a',
+            borderRadius: '10px',
+            padding: '1rem',
+            marginBottom: '1.5rem',
+          }}
+        >
+          <label
+            htmlFor="accepts_bookings"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1rem',
+              cursor: 'pointer',
+              position: 'relative',
+            }}
+          >
+            <span style={{ color: '#f0f4f8', fontWeight: 700 }}>Accepter les réservations en ligne</span>
+            <span
+              style={{
+                position: 'relative',
+                width: '48px',
+                height: '26px',
+                borderRadius: '999px',
+                background: form.accepts_bookings ? '#378ADD' : '#1e4a7a',
+                flexShrink: 0,
+                transition: 'background 0.2s ease',
+              }}
+            >
+              <span
+                style={{
+                  position: 'absolute',
+                  top: '3px',
+                  left: form.accepts_bookings ? '25px' : '3px',
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '999px',
+                  background: '#ffffff',
+                  transition: 'left 0.2s ease',
+                }}
+              />
+            </span>
+            <input
+              id="accepts_bookings"
+              type="checkbox"
+              checked={form.accepts_bookings}
+              onChange={(e) => updateField('accepts_bookings', e.target.checked)}
+              style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+            />
+          </label>
+          {form.accepts_bookings ? (
+            <p style={{ color: '#94b4d4', fontSize: '0.875rem', lineHeight: 1.6, margin: '0.75rem 0 0' }}>
+              Les clients pourront réserver un créneau directement sur votre page boutique.
+            </p>
+          ) : null}
         </div>
 
         {/* Submit Button */}

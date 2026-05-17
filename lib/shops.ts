@@ -22,12 +22,13 @@ export type ShopRow = {
   working_hours: Record<string, HoursEntry> | null;
   is_verified: boolean;
   is_approved: boolean;
+  accepts_bookings: boolean;
   owner_id: string | null;
   created_at: string;
 };
 
 const SHOP_SELECT =
-  'id, name, category, description, phone, address, photos, whatsapp, working_hours, is_verified, is_approved, owner_id, created_at';
+  'id, name, category, description, phone, address, photos, whatsapp, working_hours, is_verified, is_approved, accepts_bookings, owner_id, created_at';
 
 async function withTimeout<T>(label: string, query: PromiseLike<T>): Promise<T | null> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -68,6 +69,7 @@ function normalizeShopRows(rows: unknown[]): ShopRow[] {
       working_hours: parseHours(r.working_hours),
       is_verified: Boolean(r.is_verified),
       is_approved: Boolean(r.is_approved),
+      accepts_bookings: Boolean(r.accepts_bookings),
       owner_id: r.owner_id ?? null,
       created_at: r.created_at,
     };
@@ -129,6 +131,8 @@ function mapRowToShop(
     isOpen: computeIsOpen(hoursJson),
     isVerified: row.is_verified,
     description: row.description ?? '',
+    accepts_bookings: row.accepts_bookings,
+    ownerId: row.owner_id ?? undefined,
     hours: mapHoursJson(hoursJson),
     photos,
     videoUrl: null,

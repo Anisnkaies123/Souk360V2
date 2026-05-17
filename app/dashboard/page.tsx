@@ -19,6 +19,8 @@ type OwnerShop = {
   category: string;
   is_approved: boolean;
   is_verified: boolean;
+  accepts_bookings: boolean;
+  pending_bookings_count: number;
   created_at: string;
   photos: string[];
   description: string;
@@ -64,7 +66,7 @@ export default function DashboardPage() {
       // Fetch shops
       const { data: shopsData, error: shopsError } = await supabase
         .from('shops')
-        .select('id, name, category, is_approved, is_verified, created_at, photos, description')
+        .select('id, name, category, is_approved, is_verified, accepts_bookings, created_at, photos, description')
         .eq('owner_id', currentUser.id)
         .order('created_at', { ascending: false });
 
@@ -72,7 +74,27 @@ export default function DashboardPage() {
         setError('Impossible de charger vos commerces. Veuillez réessayer.');
         console.error('Shops fetch error:', shopsError);
       } else {
-        setShops((shopsData as OwnerShop[]) ?? []);
+        const ownerShops = ((shopsData as Omit<OwnerShop, 'pending_bookings_count'>[]) ?? []);
+        const shopsWithBookingCounts = await Promise.all(
+          ownerShops.map(async (shop) => {
+            if (!shop.accepts_bookings) return { ...shop, pending_bookings_count: 0 };
+
+            const { count, error: countError } = await supabase
+              .from('bookings')
+              .select('id', { count: 'exact', head: true })
+              .eq('shop_id', shop.id)
+              .eq('status', 'pending');
+
+            if (countError) {
+              console.error('Pending bookings count error:', countError);
+              return { ...shop, pending_bookings_count: 0 };
+            }
+
+            return { ...shop, pending_bookings_count: count ?? 0 };
+          }),
+        );
+
+        setShops(shopsWithBookingCounts);
       }
 
       setLoading(false);
@@ -253,6 +275,30 @@ export default function DashboardPage() {
                 >
                   Modifier
                 </Link>
+                {shop.accepts_bookings ? (
+                  <Link
+                    href={`/dashboard/shops/${shop.id}/bookings`}
+                    className="btn-outline"
+                    style={{ fontSize: '0.8125rem', padding: '0.375rem 0.875rem', position: 'relative' }}
+                  >
+                    📅 Réservations
+                    {shop.pending_bookings_count > 0 ? (
+                      <span
+                        aria-label={`${shop.pending_bookings_count} réservations en attente`}
+                        style={{
+                          width: '9px',
+                          height: '9px',
+                          borderRadius: '999px',
+                          background: '#fbbf24',
+                          boxShadow: '0 0 0 2px #0f2d56',
+                          position: 'absolute',
+                          top: '5px',
+                          right: '7px',
+                        }}
+                      />
+                    ) : null}
+                  </Link>
+                ) : null}
                 <Link
                   href={`/dashboard/shops/${shop.id}/posts`}
                   className="btn-outline"

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import type { User } from '@supabase/supabase-js';
 import type { Shop } from '@/lib/data';
 import PhotoLightbox from '@/components/PhotoLightbox';
 import { formatPostDate, POST_TYPE_META, type PostRow } from '@/lib/posts';
@@ -11,8 +12,50 @@ import { supabase } from '@/lib/supabase';
 
 const JS_WEEKDAY_TO_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'] as const;
 
+type BookingForm = {
+  client_name: string;
+  client_phone: string;
+  date: string;
+  time_slot: string;
+  notes: string;
+};
+
 function waDigits(shop: Shop): string {
   return (shop.whatsapp || shop.phone || '').replace(/\D/g, '');
+}
+
+function localDateInputValue(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function weekdayFromDateInput(dateValue: string): string {
+  if (!dateValue) return '';
+  const weekday = new Date(`${dateValue}T00:00:00`).toLocaleDateString('fr-FR', { weekday: 'long' });
+  return weekday.charAt(0).toUpperCase() + weekday.slice(1);
+}
+
+function slotsForDate(shop: Shop, dateValue: string): string[] {
+  const day = weekdayFromDateInput(dateValue);
+  const hours = shop.hours.find((h) => h.day === day);
+  if (!hours || hours.time === 'Fermé' || hours.time === 'Non renseigné') return [];
+
+  const match = hours.time.match(/(\d{1,2}):(\d{2}).*?(\d{1,2}):(\d{2})/);
+  if (!match) return [];
+
+  const start = Number(match[1]) * 60 + Number(match[2]);
+  const end = Number(match[3]) * 60 + Number(match[4]);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+
+  const slots: string[] = [];
+  for (let minutes = start; minutes + 60 <= end; minutes += 60) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+  }
+  return slots;
 }
 
 function StarBreakdown({ reviews }: { reviews: ReviewWithAuthor[] }) {
@@ -74,10 +117,22 @@ export default function ShopProfilePage() {
   const [shop, setShop] = useState<Shop | null>(null);
   const [reviews, setReviews] = useState<ReviewWithAuthor[]>([]);
   const [posts, setPosts] = useState<PostRow[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [bookingForm, setBookingForm] = useState<BookingForm>({
+    client_name: '',
+    client_phone: '',
+    date: localDateInputValue(),
+    time_slot: '',
+    notes: '',
+  });
+  const [bookingSaving, setBookingSaving] = useState(false);
+  const [bookingError, setBookingError] = useState('');
+  const [bookingSuccess, setBookingSuccess] = useState('');
 
   const todayFr = JS_WEEKDAY_TO_FR[new Date().getDay()];
+  const todayInput = localDateInputValue();
 
   useEffect(() => {
     if (!id) return;
@@ -89,9 +144,13 @@ export default function ShopProfilePage() {
         fetchReviewsForShop(id),
         supabase.from('posts').select('*').eq('shop_id', id).order('created_at', { ascending: false }).limit(5),
       ]);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!cancelled) {
         setShop(s);
         setReviews(r);
+        setCurrentUser(user);
         if (p.error) {
           console.error('Shop posts fetch error:', p.error);
           setPosts([]);
@@ -109,6 +168,66 @@ export default function ShopProfilePage() {
   const fullStars = shop ? Math.floor(shop.rating) : 0;
   const emptyStars = shop ? 5 - fullStars : 0;
   const wa = shop ? waDigits(shop) : '';
+  const bookingSlots = shop ? slotsForDate(shop, bookingForm.date) : [];
+  const selectedDay = weekdayFromDateInput(bookingForm.date);
+
+  function updateBookingField(key: keyof BookingForm, value: string) {
+    setBookingForm((prev) => ({
+      ...prev,
+      [key]: value,
+      ...(key === 'date' ? { time_slot: '' } : {}),
+    }));
+    setBookingError('');
+    setBookingSuccess('');
+  }
+
+  async function submitBooking(e: React.FormEvent) {
+    e.preventDefault();
+    if (!shop || !currentUser) return;
+
+    if (!shop.ownerId) {
+      setBookingError("Impossible d'envoyer la réservation pour cette boutique.");
+      return;
+    }
+
+    if (!bookingForm.time_slot || bookingSlots.length === 0) {
+      setBookingError('Veuillez choisir un créneau disponible.');
+      return;
+    }
+
+    setBookingSaving(true);
+    setBookingError('');
+    setBookingSuccess('');
+
+    const { error } = await supabase.from('bookings').insert({
+      shop_id: shop.id,
+      owner_id: shop.ownerId,
+      client_id: currentUser.id,
+      client_name: bookingForm.client_name.trim(),
+      client_phone: bookingForm.client_phone.trim(),
+      date: bookingForm.date,
+      time_slot: bookingForm.time_slot,
+      notes: bookingForm.notes.trim() || null,
+      status: 'pending',
+    });
+
+    setBookingSaving(false);
+
+    if (error) {
+      setBookingError("Impossible d'envoyer votre rendez-vous. Veuillez réessayer.");
+      console.error('Booking insert error:', error);
+      return;
+    }
+
+    setBookingSuccess('✓ Votre rendez-vous a été envoyé ! Le commerce vous confirmera bientôt.');
+    setBookingForm({
+      client_name: '',
+      client_phone: '',
+      date: localDateInputValue(),
+      time_slot: '',
+      notes: '',
+    });
+  }
 
   if (loading) {
     return (
@@ -269,6 +388,158 @@ export default function ShopProfilePage() {
                 📞 Appeler
               </a>
             </div>
+
+            {shop.accepts_bookings ? (
+              <div
+                style={{
+                  background: '#163660',
+                  border: '1px solid #1e4a7a',
+                  borderRadius: '12px',
+                  padding: '1.25rem',
+                  marginBottom: '1.25rem',
+                }}
+              >
+                <h2 style={{ fontWeight: 800, fontSize: '1.125rem', color: '#f0f4f8', margin: '0 0 1rem' }}>
+                  📅 Prendre un rendez-vous
+                </h2>
+
+                {!currentUser ? (
+                  <div
+                    style={{
+                      background: '#163660',
+                      border: '1px solid #1e4a7a',
+                      borderRadius: '10px',
+                      padding: '1rem',
+                    }}
+                  >
+                    <p style={{ color: '#94b4d4', margin: '0 0 1rem' }}>Connectez-vous pour prendre rendez-vous</p>
+                    <Link href={`/login?next=/shop/${shop.id}`} className="btn-primary">
+                      Se connecter
+                    </Link>
+                  </div>
+                ) : (
+                  <form onSubmit={submitBooking}>
+                    {bookingSuccess ? (
+                      <div
+                        style={{
+                          background: 'rgba(74, 222, 128, 0.15)',
+                          border: '1px solid rgba(74, 222, 128, 0.35)',
+                          borderRadius: '10px',
+                          padding: '1rem',
+                          marginBottom: '1rem',
+                          color: '#4ade80',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {bookingSuccess}
+                      </div>
+                    ) : null}
+
+                    {bookingError ? <p style={{ color: '#f87171', margin: '0 0 1rem', fontSize: '0.9rem' }}>{bookingError}</p> : null}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                      <div>
+                        <label className="label" htmlFor="booking_name">
+                          Votre nom complet *
+                        </label>
+                        <input
+                          id="booking_name"
+                          className="input"
+                          value={bookingForm.client_name}
+                          onChange={(e) => updateBookingField('client_name', e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="label" htmlFor="booking_phone">
+                          Votre téléphone *
+                        </label>
+                        <input
+                          id="booking_phone"
+                          className="input"
+                          value={bookingForm.client_phone}
+                          onChange={(e) => updateBookingField('client_phone', e.target.value)}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                      <div>
+                        <label className="label" htmlFor="booking_date">
+                          Date souhaitée *
+                        </label>
+                        <input
+                          id="booking_date"
+                          type="date"
+                          min={todayInput}
+                          className="input"
+                          value={bookingForm.date}
+                          onChange={(e) => updateBookingField('date', e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="label" htmlFor="booking_slot">
+                          Créneau horaire *
+                        </label>
+                        <select
+                          id="booking_slot"
+                          className="input"
+                          value={bookingForm.time_slot}
+                          onChange={(e) => updateBookingField('time_slot', e.target.value)}
+                          disabled={bookingSlots.length === 0}
+                          required
+                        >
+                          {bookingSlots.length === 0 ? (
+                            <option value="">Fermé ce jour-là</option>
+                          ) : (
+                            <>
+                              <option value="">Choisir un créneau</option>
+                              {bookingSlots.map((slot) => (
+                                <option key={slot} value={slot}>
+                                  {slot}
+                                </option>
+                              ))}
+                            </>
+                          )}
+                        </select>
+                      </div>
+                    </div>
+
+                    {bookingSlots.length === 0 ? (
+                      <p style={{ color: '#f4a61d', fontSize: '0.875rem', margin: '-0.35rem 0 1rem' }}>
+                        {selectedDay ? `${selectedDay} : fermé ce jour-là.` : 'Choisissez une date pour voir les créneaux.'}
+                      </p>
+                    ) : null}
+
+                    <div style={{ marginBottom: '1rem' }}>
+                      <label className="label" htmlFor="booking_notes">
+                        Notes
+                      </label>
+                      <textarea
+                        id="booking_notes"
+                        className="input"
+                        value={bookingForm.notes}
+                        onChange={(e) => updateBookingField('notes', e.target.value)}
+                        rows={3}
+                        placeholder="Ex: première visite, problème spécifique..."
+                        style={{ resize: 'vertical' }}
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="btn-primary"
+                      disabled={bookingSaving || bookingSlots.length === 0}
+                      style={{ justifyContent: 'center', width: '100%' }}
+                    >
+                      {bookingSaving ? 'Envoi…' : 'Confirmer le rendez-vous'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            ) : null}
 
             <p style={{ color: '#94b4d4', lineHeight: 1.75, margin: '0 0 1rem', fontSize: '0.975rem' }}>{shop.description}</p>
 

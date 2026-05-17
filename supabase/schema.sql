@@ -26,6 +26,7 @@ create table public.shops (
   video_url text,
   whatsapp text,
   hours jsonb,
+  accepts_bookings boolean default false,
   is_approved boolean not null default false,
   owner_id uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now()
@@ -49,11 +50,32 @@ create table public.reviews (
 create index reviews_shop_idx on public.reviews (shop_id);
 
 -- ---------------------------------------------------------------------------
+-- bookings
+-- ---------------------------------------------------------------------------
+create table public.bookings (
+  id uuid primary key default gen_random_uuid(),
+  shop_id uuid not null references public.shops (id) on delete cascade,
+  owner_id uuid not null references auth.users (id) on delete cascade,
+  client_id uuid not null references auth.users (id) on delete cascade,
+  client_name text not null,
+  client_phone text not null,
+  date date not null,
+  time_slot text not null,
+  status text not null default 'pending'
+    check (status in ('pending', 'confirmed', 'cancelled')),
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create index bookings_shop_date_idx on public.bookings (shop_id, date, time_slot);
+
+-- ---------------------------------------------------------------------------
 -- RLS
 -- ---------------------------------------------------------------------------
 alter table public.profiles enable row level security;
 alter table public.shops enable row level security;
 alter table public.reviews enable row level security;
+alter table public.bookings enable row level security;
 
 create policy "profiles_select_all"
   on public.profiles for select
@@ -101,6 +123,31 @@ create policy "reviews_insert_authenticated_approved_shop"
       where s.id = shop_id and s.is_approved = true
     )
   );
+
+create policy "bookings_select_client"
+  on public.bookings for select
+  to authenticated
+  using (auth.uid() = client_id);
+
+create policy "bookings_select_owner"
+  on public.bookings for select
+  to authenticated
+  using (auth.uid() = owner_id);
+
+create policy "bookings_insert_client"
+  on public.bookings for insert
+  to authenticated
+  with check (auth.uid() = client_id);
+
+create policy "bookings_update_owner"
+  on public.bookings for update
+  to authenticated
+  using (auth.uid() = owner_id);
+
+create policy "bookings_update_client"
+  on public.bookings for update
+  to authenticated
+  using (auth.uid() = client_id);
 
 -- Admin (profiles.role = 'admin'): modération complète
 grant delete on table public.shops to authenticated;
@@ -191,3 +238,5 @@ grant insert, update on public.shops to authenticated;
 
 grant select on public.reviews to anon, authenticated;
 grant insert on public.reviews to authenticated;
+
+grant select, insert, update on public.bookings to authenticated;
