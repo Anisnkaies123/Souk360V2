@@ -32,6 +32,8 @@ export type ShopRow = {
 
 const SHOP_SELECT =
   'id, name, category, description, phone, address, lat, lng, photos, whatsapp, working_hours, is_verified, is_approved, accepts_bookings, owner_id, created_at';
+const SHOP_SELECT_FALLBACK =
+  'id, name, category, description, phone, address, photos, whatsapp, working_hours, is_verified, is_approved, owner_id, created_at';
 
 async function withTimeout<T>(label: string, query: PromiseLike<T>): Promise<T | null> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -181,7 +183,7 @@ function normalizeReviewStatRows(rows: unknown): { shop_id: string; rating: numb
 }
 
 export async function fetchApprovedShops(): Promise<Shop[]> {
-  const result = await withTimeout(
+  let result = await withTimeout(
     'approved shops',
     supabase
       .from('shops')
@@ -190,7 +192,22 @@ export async function fetchApprovedShops(): Promise<Shop[]> {
       .order('created_at', { ascending: false }),
   );
   if (!result) return [];
-  const { data: rows, error } = result;
+  let { data: rows, error } = result;
+
+  if (error) {
+    console.warn('Approved shops fetch with optional columns failed, retrying with fallback select:', error);
+    result = await withTimeout(
+      'approved shops fallback',
+      supabase
+        .from('shops')
+        .select(SHOP_SELECT_FALLBACK)
+        .eq('is_approved', true)
+        .order('created_at', { ascending: false }),
+    );
+    if (!result) return [];
+    rows = result.data;
+    error = result.error;
+  }
 
   if (error || !rows?.length) return [];
 
@@ -205,7 +222,7 @@ export async function fetchApprovedShops(): Promise<Shop[]> {
 }
 
 export async function fetchApprovedShopById(id: string): Promise<Shop | null> {
-  const result = await withTimeout(
+  let result = await withTimeout(
     'approved shop detail',
     supabase
       .from('shops')
@@ -215,7 +232,23 @@ export async function fetchApprovedShopById(id: string): Promise<Shop | null> {
       .maybeSingle(),
   );
   if (!result) return null;
-  const { data: row, error } = result;
+  let { data: row, error } = result;
+
+  if (error) {
+    console.warn('Approved shop detail fetch with optional columns failed, retrying with fallback select:', error);
+    result = await withTimeout(
+      'approved shop detail fallback',
+      supabase
+        .from('shops')
+        .select(SHOP_SELECT_FALLBACK)
+        .eq('id', id)
+        .eq('is_approved', true)
+        .maybeSingle(),
+    );
+    if (!result) return null;
+    row = result.data;
+    error = result.error;
+  }
 
   if (error || !row) return null;
 
