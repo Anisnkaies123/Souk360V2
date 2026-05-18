@@ -1,21 +1,25 @@
 -- Run this in Supabase SQL Editor to fix all RLS conflicts from previous migrations.
 -- This drops all existing policies and recreates them cleanly.
 
--- Drop all existing policies
-DROP POLICY IF EXISTS "shops_select_public" ON public.shops;
-DROP POLICY IF EXISTS "shops_select_authenticated" ON public.shops;
-DROP POLICY IF EXISTS "shops_select_owner" ON public.shops;
-DROP POLICY IF EXISTS "shops_insert_owner" ON public.shops;
-DROP POLICY IF EXISTS "shops_update_owner" ON public.shops;
-DROP POLICY IF EXISTS "shops_update_admin" ON public.shops;
-DROP POLICY IF EXISTS "shops_delete_owner" ON public.shops;
-DROP POLICY IF EXISTS "shops_delete_admin" ON public.shops;
-DROP POLICY IF EXISTS "reviews_select_public" ON public.reviews;
-DROP POLICY IF EXISTS "reviews_select_authenticated" ON public.reviews;
-DROP POLICY IF EXISTS "reviews_insert_authenticated" ON public.reviews;
-DROP POLICY IF EXISTS "profiles_select_public" ON public.profiles;
-DROP POLICY IF EXISTS "profiles_select_authenticated" ON public.profiles;
-DROP POLICY IF EXISTS "profiles_update_owner" ON public.profiles;
+-- Drop all policies on tables using a DO block
+DO $$
+DECLARE
+  policy_record RECORD;
+BEGIN
+  FOR policy_record IN 
+    SELECT policyname, tablename 
+    FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename IN ('shops', 'reviews', 'profiles')
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', policy_record.policyname, policy_record.tablename);
+  END LOOP;
+END $$;
+
+-- Enable RLS on all tables
+ALTER TABLE public.shops ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- Recreate policies cleanly
 
@@ -46,14 +50,14 @@ CREATE POLICY "shops_insert_owner"
   ON public.shops FOR INSERT TO authenticated
   WITH CHECK (owner_id = auth.uid());
 
-CREATE POLICY "shops_update_owner_or_admin"
+CREATE OR REPLACE POLICY "shops_update_owner_or_admin"
   ON public.shops FOR UPDATE TO authenticated
   USING (
     owner_id = auth.uid()
     OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
   );
 
-CREATE POLICY "shops_delete_owner_or_admin"
+CREATE OR REPLACE POLICY "shops_delete_owner_or_admin"
   ON public.shops FOR DELETE TO authenticated
   USING (
     owner_id = auth.uid()

@@ -183,7 +183,7 @@ function normalizeReviewStatRows(rows: unknown): { shop_id: string; rating: numb
 }
 
 export async function fetchApprovedShops(): Promise<Shop[]> {
-  let result = await withTimeout(
+  const result = await withTimeout(
     'approved shops',
     supabase
       .from('shops')
@@ -192,11 +192,12 @@ export async function fetchApprovedShops(): Promise<Shop[]> {
       .order('created_at', { ascending: false }),
   );
   if (!result) return [];
-  let { data: rows, error } = result;
+  let rows: unknown[] | null | undefined = result.data;
+  let error: unknown = result.error;
 
   if (error) {
     console.warn('Approved shops fetch with optional columns failed, retrying with fallback select:', error);
-    result = await withTimeout(
+    const fallbackResult = await withTimeout(
       'approved shops fallback',
       supabase
         .from('shops')
@@ -204,9 +205,9 @@ export async function fetchApprovedShops(): Promise<Shop[]> {
         .eq('is_approved', true)
         .order('created_at', { ascending: false }),
     );
-    if (!result) return [];
-    rows = result.data;
-    error = result.error;
+    if (!fallbackResult) return [];
+    rows = fallbackResult.data;
+    error = fallbackResult.error;
   }
 
   if (error || !rows?.length) return [];
@@ -222,7 +223,7 @@ export async function fetchApprovedShops(): Promise<Shop[]> {
 }
 
 export async function fetchApprovedShopById(id: string): Promise<Shop | null> {
-  let result = await withTimeout(
+  const result = await withTimeout(
     'approved shop detail',
     supabase
       .from('shops')
@@ -232,11 +233,12 @@ export async function fetchApprovedShopById(id: string): Promise<Shop | null> {
       .maybeSingle(),
   );
   if (!result) return null;
-  let { data: row, error } = result;
+  let row: unknown = result.data;
+  let error: unknown = result.error;
 
   if (error) {
     console.warn('Approved shop detail fetch with optional columns failed, retrying with fallback select:', error);
-    result = await withTimeout(
+    const fallbackResult = await withTimeout(
       'approved shop detail fallback',
       supabase
         .from('shops')
@@ -245,9 +247,9 @@ export async function fetchApprovedShopById(id: string): Promise<Shop | null> {
         .eq('is_approved', true)
         .maybeSingle(),
     );
-    if (!result) return null;
-    row = result.data;
-    error = result.error;
+    if (!fallbackResult) return null;
+    row = fallbackResult.data;
+    error = fallbackResult.error;
   }
 
   if (error || !row) return null;
